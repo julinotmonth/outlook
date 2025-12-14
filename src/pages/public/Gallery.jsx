@@ -3,104 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X, ZoomIn, Play } from 'lucide-react'
 import { GALLERY_CATEGORIES } from '../../utils/constants'
 import { cn } from '../../lib/utils'
-
-// Dummy gallery data
-const GALLERY_DATA = [
-  {
-    id: 1,
-    category: 'before-after',
-    image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=600&h=800&fit=crop',
-    title: 'Classic Transformation',
-    type: 'image',
-  },
-  {
-    id: 2,
-    category: 'before-after',
-    image: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600&h=600&fit=crop',
-    title: 'Fade Makeover',
-    type: 'image',
-  },
-  {
-    id: 3,
-    category: 'ambience',
-    image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&h=600&fit=crop',
-    title: 'Interior View',
-    type: 'image',
-  },
-  {
-    id: 4,
-    category: 'ambience',
-    image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600&h=800&fit=crop',
-    title: 'Barber Station',
-    type: 'image',
-  },
-  {
-    id: 5,
-    category: 'tools',
-    image: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=600&h=600&fit=crop',
-    title: 'Premium Tools',
-    type: 'image',
-  },
-  {
-    id: 6,
-    category: 'tools',
-    image: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=800&h=600&fit=crop',
-    title: 'Shaving Kit',
-    type: 'image',
-  },
-  {
-    id: 7,
-    category: 'before-after',
-    image: 'https://images.unsplash.com/photo-1560869713-bf0cd31a2478?w=600&h=800&fit=crop',
-    title: 'Styling Result',
-    type: 'image',
-  },
-  {
-    id: 8,
-    category: 'ambience',
-    image: 'https://images.unsplash.com/photo-1521490683712-35a1cb235d1c?w=800&h=600&fit=crop',
-    title: 'Waiting Area',
-    type: 'image',
-  },
-  {
-    id: 9,
-    category: 'awards',
-    image: 'https://images.unsplash.com/photo-1578269174936-2709b6aeb913?w=600&h=600&fit=crop',
-    title: 'Best Barbershop 2023',
-    type: 'image',
-  },
-  {
-    id: 10,
-    category: 'before-after',
-    image: 'https://images.unsplash.com/photo-1593702288056-7927b442d0fa?w=600&h=800&fit=crop',
-    title: 'Beard Transformation',
-    type: 'image',
-  },
-  {
-    id: 11,
-    category: 'tools',
-    image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=600&h=600&fit=crop',
-    title: 'Classic Razor',
-    type: 'image',
-  },
-  {
-    id: 12,
-    category: 'ambience',
-    image: 'https://images.unsplash.com/photo-1519735777090-ec97162dc266?w=800&h=600&fit=crop',
-    title: 'Evening Vibes',
-    type: 'image',
-  },
-]
+import { useGalleryStore } from '../../store/useStore'
 
 const Gallery = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedImage, setSelectedImage] = useState(null)
 
+  // Use Zustand store for gallery data - only show active items
+  const { getActiveGallery } = useGalleryStore()
+  const galleryData = getActiveGallery()
+
   // Filter gallery items
   const filteredItems = useMemo(() => {
-    if (selectedCategory === 'all') return GALLERY_DATA
-    return GALLERY_DATA.filter((item) => item.category === selectedCategory)
-  }, [selectedCategory])
+    if (selectedCategory === 'all') return galleryData
+    return galleryData.filter((item) => item.category === selectedCategory)
+  }, [selectedCategory, galleryData])
 
   return (
     <div className="min-h-screen pt-24 pb-16">
@@ -164,6 +81,17 @@ const Gallery = () => {
             ))}
           </AnimatePresence>
         </motion.div>
+
+        {/* Empty State */}
+        {filteredItems.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-16"
+          >
+            <p className="text-cream/60">Belum ada gambar dalam kategori ini</p>
+          </motion.div>
+        )}
 
         {/* Lightbox */}
         <AnimatePresence>

@@ -13,6 +13,7 @@ import {
   ToggleRight,
   Upload,
   Users,
+  Clock,
 } from 'lucide-react'
 import { Card, CardContent } from '../../components/common/Card'
 import Button from '../../components/common/Button'
@@ -20,6 +21,7 @@ import { Input, Textarea, FormField } from '../../components/common/Input'
 import { Modal, DialogFooter } from '../../components/common/Modal'
 import { barberSchema } from '../../utils/validators'
 import { useTeamStore } from '../../store/useStore'
+import { TIME_SLOTS } from '../../utils/constants'
 import { cn } from '../../lib/utils'
 
 const ROLE_OPTIONS = [
@@ -46,6 +48,8 @@ const ManageTeam = () => {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedSpecializations, setSelectedSpecializations] = useState([])
+  const [imageUrl, setImageUrl] = useState('')
+  const [workSchedule, setWorkSchedule] = useState({ startTime: '09:00', endTime: '20:00' })
 
   const {
     register,
@@ -67,6 +71,8 @@ const ManageTeam = () => {
     if (barber) {
       setEditingBarber(barber)
       setSelectedSpecializations(barber.specializations || [])
+      setImageUrl(barber.image || '')
+      setWorkSchedule(barber.workSchedule || { startTime: '09:00', endTime: '20:00' })
       reset({
         name: barber.name,
         role: barber.role,
@@ -78,6 +84,8 @@ const ManageTeam = () => {
     } else {
       setEditingBarber(null)
       setSelectedSpecializations([])
+      setImageUrl('')
+      setWorkSchedule({ startTime: '09:00', endTime: '20:00' })
       reset({
         name: '',
         role: '',
@@ -95,6 +103,8 @@ const ManageTeam = () => {
     setIsModalOpen(false)
     setEditingBarber(null)
     setSelectedSpecializations([])
+    setImageUrl('')
+    setWorkSchedule({ startTime: '09:00', endTime: '20:00' })
     reset()
   }
 
@@ -124,8 +134,9 @@ const ManageTeam = () => {
         specializations: selectedSpecializations,
         rating: editingBarber?.rating || 0,
         totalClients: editingBarber?.totalClients || 0,
-        image: editingBarber?.image || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
+        image: imageUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop',
         isAvailable: editingBarber?.isAvailable ?? true,
+        workSchedule: workSchedule,
       }
 
       if (editingBarber) {
@@ -231,6 +242,16 @@ const ManageTeam = () => {
                     </div>
                   </div>
 
+                  {/* Work Schedule */}
+                  {barber.workSchedule && (
+                    <div className="flex items-center gap-2 mb-3 px-2 py-1.5 bg-charcoal-dark rounded-lg">
+                      <Clock className="w-3.5 h-3.5 text-gold" />
+                      <span className="text-cream/70 text-xs">
+                        Jam Kerja: {barber.workSchedule.startTime} - {barber.workSchedule.endTime}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Stats */}
                   <div className="grid grid-cols-2 gap-2 mb-3 text-center">
                     <div className="bg-charcoal-dark rounded-lg p-2">
@@ -308,26 +329,38 @@ const ManageTeam = () => {
         title={editingBarber ? 'Edit Barber' : 'Tambah Barber'}
       >
         <form onSubmit={handleSubmit(onSubmit)} className="py-4 space-y-4 max-h-[60vh] overflow-y-auto">
-          {/* Image Upload Placeholder */}
-          <div className="flex justify-center">
+          {/* Image Upload/URL */}
+          <div className="flex flex-col items-center gap-3">
             <div className="relative">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-charcoal-dark border-2 border-dashed border-gold/30 flex items-center justify-center">
-                {editingBarber?.image ? (
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-charcoal-dark border-2 border-dashed border-gold/30 flex items-center justify-center overflow-hidden">
+                {imageUrl ? (
                   <img
-                    src={editingBarber.image}
-                    alt=""
+                    src={imageUrl}
+                    alt="Preview"
                     className="w-full h-full rounded-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                      e.target.nextSibling.style.display = 'flex'
+                    }}
                   />
-                ) : (
+                ) : null}
+                <div className={cn(
+                  "w-full h-full flex items-center justify-center",
+                  imageUrl ? "hidden" : "flex"
+                )}>
                   <Upload className="w-6 h-6 sm:w-8 sm:h-8 text-cream/30" />
-                )}
+                </div>
               </div>
-              <button
-                type="button"
-                className="absolute bottom-0 right-0 p-1.5 bg-gold rounded-full text-charcoal-dark"
-              >
-                <Edit className="w-3 h-3" />
-              </button>
+            </div>
+            <div className="w-full">
+              <label className="block text-cream text-sm font-medium mb-1.5">URL Foto Profil</label>
+              <Input
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                placeholder="https://example.com/photo.jpg"
+                className="text-sm"
+              />
+              <p className="text-cream/40 text-xs mt-1">Masukkan URL gambar untuk foto profil barber</p>
             </div>
           </div>
 
@@ -400,6 +433,41 @@ const ManageTeam = () => {
               className="text-sm"
             />
           </FormField>
+
+          {/* Work Schedule */}
+          <div>
+            <label className="block text-cream text-sm font-medium mb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gold" />
+              Jadwal Kerja
+            </label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-cream/60 text-xs mb-1">Jam Mulai</label>
+                <select
+                  value={workSchedule.startTime}
+                  onChange={(e) => setWorkSchedule(prev => ({ ...prev, startTime: e.target.value }))}
+                  className="w-full px-3 py-2.5 bg-charcoal-dark border border-gold/30 rounded-lg text-cream text-sm focus:outline-none focus:border-gold transition-colors"
+                >
+                  {TIME_SLOTS.map((time) => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-cream/60 text-xs mb-1">Jam Selesai</label>
+                <select
+                  value={workSchedule.endTime}
+                  onChange={(e) => setWorkSchedule(prev => ({ ...prev, endTime: e.target.value }))}
+                  className="w-full px-3 py-2.5 bg-charcoal-dark border border-gold/30 rounded-lg text-cream text-sm focus:outline-none focus:border-gold transition-colors"
+                >
+                  {TIME_SLOTS.map((time) => (
+                    <option key={time} value={time}>{time}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p className="text-cream/40 text-xs mt-1">Atur jam kerja barber (jam buka - jam tutup)</p>
+          </div>
 
           {/* Specializations */}
           <div>

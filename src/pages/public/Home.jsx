@@ -9,10 +9,13 @@ import {
   Quote,
   Clock,
   MapPin,
-  ChevronRight
+  ChevronRight,
+  MessageSquare
 } from 'lucide-react'
 import Button from '../../components/common/Button'
-import { STATS, TESTIMONIALS } from '../../utils/constants'
+import { STATS } from '../../utils/constants'
+import { useServicesStore, useReviewStore } from '../../store/useStore'
+import { formatCurrency } from '../../utils/formatters'
 
 // Animation variants
 const fadeInUp = {
@@ -320,32 +323,10 @@ const StatsSection = () => {
 
 // Services Preview
 const ServicesPreview = () => {
-  const services = [
-    {
-      title: 'Classic Haircut',
-      description: 'Potongan rambut klasik dengan teknik presisi tinggi',
-      price: 'Rp 75.000',
-      image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=300&fit=crop',
-    },
-    {
-      title: 'Premium Shave',
-      description: 'Cukur jenggot premium dengan hot towel treatment',
-      price: 'Rp 60.000',
-      image: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=300&fit=crop',
-    },
-    {
-      title: 'Hair Coloring',
-      description: 'Pewarnaan rambut dengan produk berkualitas',
-      price: 'Rp 150.000',
-      image: 'https://images.unsplash.com/photo-1560869713-bf0cd31a2478?w=400&h=300&fit=crop',
-    },
-    {
-      title: 'VIP Package',
-      description: 'Paket lengkap haircut, shave, dan styling',
-      price: 'Rp 200.000',
-      image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=300&fit=crop',
-    },
-  ]
+  // Use services from store - only show first 4 active services
+  const { getActiveServices } = useServicesStore()
+  const activeServices = getActiveServices()
+  const services = activeServices.slice(0, 4)
 
   return (
     <section className="py-24">
@@ -367,7 +348,7 @@ const ServicesPreview = () => {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {services.map((service, index) => (
             <motion.div
-              key={service.title}
+              key={service.id}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -378,7 +359,7 @@ const ServicesPreview = () => {
               <div className="aspect-[4/3] overflow-hidden">
                 <img
                   src={service.image}
-                  alt={service.title}
+                  alt={service.name}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-charcoal via-transparent to-transparent" />
@@ -387,14 +368,14 @@ const ServicesPreview = () => {
               {/* Content */}
               <div className="p-6">
                 <h3 className="font-heading text-xl font-bold text-cream mb-2">
-                  {service.title}
+                  {service.name}
                 </h3>
-                <p className="text-cream/60 text-sm mb-4">
+                <p className="text-cream/60 text-sm mb-4 line-clamp-2">
                   {service.description}
                 </p>
                 <div className="flex items-center justify-between">
                   <span className="font-display text-gold text-lg">
-                    {service.price}
+                    {formatCurrency(service.price)}
                   </span>
                   <Link
                     to="/booking"
@@ -429,6 +410,40 @@ const ServicesPreview = () => {
 
 // Testimonials Section
 const TestimonialsSection = () => {
+  const { reviews } = useReviewStore()
+  
+  // Get latest 3 reviews with rating >= 4
+  const topReviews = reviews
+    .filter(review => review.rating >= 4)
+    .slice(0, 3)
+
+  // If no reviews yet, show empty state
+  if (topReviews.length === 0) {
+    return (
+      <section className="py-24 bg-charcoal">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="text-center mb-16"
+          >
+            <span className="section-subtitle">Testimoni</span>
+            <h2 className="section-title">
+              Apa Kata <span className="text-gradient">Pelanggan</span>
+            </h2>
+          </motion.div>
+          
+          <div className="text-center py-12">
+            <MessageSquare className="w-16 h-16 text-gold/30 mx-auto mb-4" />
+            <p className="text-cream/50">Belum ada ulasan dari pelanggan</p>
+            <p className="text-cream/30 text-sm mt-2">Jadilah yang pertama memberikan ulasan!</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section className="py-24 bg-charcoal">
       <div className="container mx-auto px-4">
@@ -447,9 +462,9 @@ const TestimonialsSection = () => {
 
         {/* Testimonials Grid */}
         <div className="grid md:grid-cols-3 gap-6">
-          {TESTIMONIALS.map((testimonial, index) => (
+          {topReviews.map((review, index) => (
             <motion.div
-              key={testimonial.id}
+              key={review.id}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -461,29 +476,48 @@ const TestimonialsSection = () => {
 
               {/* Stars */}
               <div className="flex gap-1 mb-4">
-                {Array.from({ length: testimonial.rating }).map((_, i) => (
+                {Array.from({ length: review.rating }).map((_, i) => (
                   <Star key={i} className="w-4 h-4 text-gold fill-gold" />
                 ))}
               </div>
 
               {/* Text */}
-              <p className="text-cream/70 mb-6 italic">"{testimonial.text}"</p>
+              <p className="text-cream/70 mb-6 italic line-clamp-4">"{review.comment}"</p>
 
               {/* Author */}
               <div className="flex items-center gap-3">
-                <img
-                  src={testimonial.image}
-                  alt={testimonial.name}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-gold/30"
-                />
+                <div className="w-12 h-12 rounded-full bg-gold/20 flex items-center justify-center border-2 border-gold/30">
+                  <span className="text-gold font-medium text-lg">
+                    {review.customerName?.charAt(0)?.toUpperCase() || 'U'}
+                  </span>
+                </div>
                 <div>
-                  <h4 className="font-medium text-cream">{testimonial.name}</h4>
-                  <p className="text-cream/50 text-sm">{testimonial.role}</p>
+                  <h4 className="font-medium text-cream">{review.customerName}</h4>
+                  <p className="text-cream/50 text-sm">
+                    Barber: {review.barberName}
+                  </p>
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
+
+        {/* View More */}
+        {reviews.length > 3 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            className="text-center mt-8"
+          >
+            <Link to="/team">
+              <Button variant="outline">
+                Lihat Semua Ulasan
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </motion.div>
+        )}
       </div>
     </section>
   )

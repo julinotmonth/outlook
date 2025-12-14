@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
@@ -11,27 +11,65 @@ import {
   Lock, 
   Scissors,
   ArrowRight,
-  Loader2
+  Loader2,
+  AlertCircle,
+  X,
+  User
 } from 'lucide-react'
 import Button from '../../components/common/Button'
 import { Input, FormField } from '../../components/common/Input'
+import { Modal } from '../../components/common/Modal'
 import { loginSchema } from '../../utils/validators'
 import { useAuthStore } from '../../store/useStore'
 import { cn } from '../../lib/utils'
+
+// Google Icon Component
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24">
+    <path
+      fill="#4285F4"
+      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+    />
+    <path
+      fill="#EA4335"
+      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+    />
+  </svg>
+)
+
+// Sample Google accounts for demo
+const GOOGLE_ACCOUNTS = [
+  { id: 1, name: 'Budi Santoso', email: 'budi.santoso@gmail.com', avatar: 'B' },
+  { id: 2, name: 'Dewi Lestari', email: 'dewi.lestari@gmail.com', avatar: 'D' },
+  { id: 3, name: 'Ahmad Rizky', email: 'ahmad.rizky@gmail.com', avatar: 'A' },
+]
 
 const Login = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [showGoogleModal, setShowGoogleModal] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState(null)
   
-  const { login } = useAuthStore()
+  const { loginWithCredentials, login, register: registerUser } = useAuthStore()
   const from = location.state?.from?.pathname || '/'
+  const message = location.state?.message || null
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    setError,
   } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -45,30 +83,70 @@ const Login = () => {
     setIsLoading(true)
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000))
       
-      // Dummy user for demo
-      const dummyUser = {
-        id: 1,
-        name: 'John Doe',
-        email: data.email,
-        role: data.email.includes('admin') ? 'admin' : 'user',
+      // Login with credentials validation
+      const result = loginWithCredentials(data.email, data.password)
+      
+      if (!result.success) {
+        setError('root', { message: result.message })
+        toast.error(result.message)
+        setIsLoading(false)
+        return
       }
       
-      login(dummyUser, 'dummy-token-123')
       toast.success('Login berhasil!')
       
       // Redirect based on role
-      if (dummyUser.role === 'admin') {
+      if (result.user.role === 'admin') {
         navigate('/admin')
       } else {
         navigate(from, { replace: true })
       }
     } catch (error) {
-      toast.error('Login gagal. Periksa email dan password Anda.')
+      toast.error('Login gagal. Silakan coba lagi.')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Handle Google Login
+  const handleGoogleLogin = async (account) => {
+    setSelectedGoogleAccount(account)
+    setIsGoogleLoading(true)
+    
+    try {
+      // Simulate Google OAuth delay
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      // Register or login the Google user
+      const googleUser = {
+        id: Date.now(),
+        name: account.name,
+        email: account.email,
+        phone: '',
+        role: 'user',
+      }
+      
+      // Try to register first (if not exists), then login
+      registerUser({
+        name: account.name,
+        email: account.email,
+        phone: '',
+        password: 'google-oauth-' + account.id, // dummy password for Google users
+      })
+      
+      login(googleUser, 'google-token-' + Date.now())
+      
+      toast.success(`Selamat datang, ${account.name}!`)
+      setShowGoogleModal(false)
+      navigate(from, { replace: true })
+    } catch (error) {
+      toast.error('Google login gagal. Silakan coba lagi.')
+    } finally {
+      setIsGoogleLoading(false)
+      setSelectedGoogleAccount(null)
     }
   }
 
@@ -102,8 +180,26 @@ const Login = () => {
             </p>
           </div>
 
+          {/* Message from redirect */}
+          {message && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 rounded-lg bg-gold/10 border border-gold/30 flex items-start gap-3"
+            >
+              <AlertCircle className="w-5 h-5 text-gold shrink-0 mt-0.5" />
+              <p className="text-cream text-sm">{message}</p>
+            </motion.div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {errors.root && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                {errors.root.message}
+              </div>
+            )}
+
             <FormField label="Email" error={errors.email?.message} required>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-cream/40" />
@@ -175,6 +271,15 @@ const Login = () => {
             </Button>
           </form>
 
+          {/* Demo Account Info */}
+          <div className="mt-6 p-4 rounded-lg bg-charcoal border border-gold/20">
+            <p className="text-gold text-sm font-medium mb-2">Demo Account:</p>
+            <div className="space-y-1 text-xs text-cream/60">
+              <p><span className="text-cream/80">Admin:</span> admin@outlook.com / admin123</p>
+              <p><span className="text-cream/80">User:</span> john@email.com / user123</p>
+            </div>
+          </div>
+
           {/* Divider */}
           <div className="relative my-8">
             <div className="absolute inset-0 flex items-center">
@@ -187,25 +292,12 @@ const Login = () => {
 
           {/* Social Login */}
           <div className="space-y-3">
-            <button className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gold/30 rounded-lg text-cream hover:bg-gold/10 transition-colors">
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path
-                  fill="currentColor"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                />
-                <path
-                  fill="currentColor"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                />
-              </svg>
+            <button 
+              type="button"
+              onClick={() => setShowGoogleModal(true)}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+            >
+              <GoogleIcon />
               <span>Lanjutkan dengan Google</span>
             </button>
           </div>
@@ -245,6 +337,113 @@ const Login = () => {
           </motion.div>
         </div>
       </div>
+
+      {/* Google Login Modal */}
+      <AnimatePresence>
+        {showGoogleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isGoogleLoading && setShowGoogleModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <GoogleIcon />
+                    <span className="text-gray-800 font-medium text-lg">Masuk dengan Google</span>
+                  </div>
+                  {!isGoogleLoading && (
+                    <button
+                      onClick={() => setShowGoogleModal(false)}
+                      className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-gray-500 text-sm mt-2">
+                  Pilih akun untuk melanjutkan ke Outlook Barbershop
+                </p>
+              </div>
+
+              {/* Account List */}
+              <div className="p-4">
+                {GOOGLE_ACCOUNTS.map((account) => (
+                  <button
+                    key={account.id}
+                    onClick={() => handleGoogleLogin(account)}
+                    disabled={isGoogleLoading}
+                    className={cn(
+                      'w-full flex items-center gap-4 p-4 rounded-xl transition-all',
+                      isGoogleLoading && selectedGoogleAccount?.id === account.id
+                        ? 'bg-blue-50 border-2 border-blue-500'
+                        : 'hover:bg-gray-50 border-2 border-transparent',
+                      isGoogleLoading && selectedGoogleAccount?.id !== account.id && 'opacity-50'
+                    )}
+                  >
+                    {/* Avatar */}
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-medium text-lg">
+                      {account.avatar}
+                    </div>
+                    
+                    {/* Info */}
+                    <div className="flex-1 text-left">
+                      <p className="font-medium text-gray-800">{account.name}</p>
+                      <p className="text-sm text-gray-500">{account.email}</p>
+                    </div>
+
+                    {/* Loading indicator */}
+                    {isGoogleLoading && selectedGoogleAccount?.id === account.id && (
+                      <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    )}
+                  </button>
+                ))}
+
+                {/* Use another account */}
+                <button
+                  disabled={isGoogleLoading}
+                  className={cn(
+                    'w-full flex items-center gap-4 p-4 rounded-xl mt-2 transition-all',
+                    'hover:bg-gray-50 border-2 border-transparent',
+                    isGoogleLoading && 'opacity-50 cursor-not-allowed'
+                  )}
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">
+                    <User className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="font-medium text-gray-800">Gunakan akun lain</p>
+                  </div>
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <p className="text-xs text-gray-500 text-center">
+                  Dengan melanjutkan, Anda menyetujui{' '}
+                  <a href="#" className="text-blue-600 hover:underline">Persyaratan Layanan</a>
+                  {' '}dan{' '}
+                  <a href="#" className="text-blue-600 hover:underline">Kebijakan Privasi</a>
+                  {' '}Google.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

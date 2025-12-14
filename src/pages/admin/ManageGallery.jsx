@@ -20,21 +20,18 @@ import { Input } from '../../components/common/Input'
 import { Modal, DialogFooter } from '../../components/common/Modal'
 import { GALLERY_CATEGORIES } from '../../utils/constants'
 import { cn } from '../../lib/utils'
-
-// Dummy gallery data
-const INITIAL_GALLERY = [
-  { id: 1, title: 'Classic Transformation', category: 'before-after', image: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=400&fit=crop', isActive: true },
-  { id: 2, title: 'Fade Makeover', category: 'before-after', image: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=400&h=400&fit=crop', isActive: true },
-  { id: 3, title: 'Interior View', category: 'ambience', image: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400&h=400&fit=crop', isActive: true },
-  { id: 4, title: 'Barber Station', category: 'ambience', image: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=400&h=400&fit=crop', isActive: true },
-  { id: 5, title: 'Premium Tools', category: 'tools', image: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=400&h=400&fit=crop', isActive: true },
-  { id: 6, title: 'Shaving Kit', category: 'tools', image: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?w=400&h=400&fit=crop', isActive: false },
-  { id: 7, title: 'Best Barbershop 2023', category: 'awards', image: 'https://images.unsplash.com/photo-1578269174936-2709b6aeb913?w=400&h=400&fit=crop', isActive: true },
-  { id: 8, title: 'Styling Result', category: 'before-after', image: 'https://images.unsplash.com/photo-1560869713-bf0cd31a2478?w=400&h=400&fit=crop', isActive: true },
-]
+import { useGalleryStore } from '../../store/useStore'
 
 const ManageGallery = () => {
-  const [gallery, setGallery] = useState(INITIAL_GALLERY)
+  // Use Zustand store for persistent gallery data
+  const { 
+    gallery, 
+    addGalleryItem, 
+    updateGalleryItem, 
+    deleteGalleryItem, 
+    toggleActive 
+  } = useGalleryStore()
+
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -106,18 +103,16 @@ const ManageGallery = () => {
       await new Promise(resolve => setTimeout(resolve, 1000))
 
       if (editingItem) {
-        setGallery(prev => 
-          prev.map(item => item.id === editingItem.id ? { ...item, ...formData } : item)
-        )
+        // Update existing item using store
+        updateGalleryItem(editingItem.id, formData)
         toast.success('Gambar berhasil diupdate')
       } else {
+        // Add new item using store
         const newItem = {
           ...formData,
-          id: Date.now(),
           image: formData.image || 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=400&h=400&fit=crop',
-          isActive: true,
         }
-        setGallery(prev => [...prev, newItem])
+        addGalleryItem(newItem)
         toast.success('Gambar berhasil ditambahkan')
       }
       
@@ -129,19 +124,17 @@ const ManageGallery = () => {
     }
   }
 
-  // Toggle active status
-  const toggleActive = (id) => {
-    setGallery(prev =>
-      prev.map(item => item.id === id ? { ...item, isActive: !item.isActive } : item)
-    )
+  // Toggle active status using store
+  const handleToggleActive = (id) => {
+    toggleActive(id)
     toast.success('Status berhasil diubah')
   }
 
-  // Delete item
+  // Delete item using store
   const handleDelete = async () => {
     if (!deleteConfirm) return
     
-    setGallery(prev => prev.filter(item => item.id !== deleteConfirm.id))
+    deleteGalleryItem(deleteConfirm.id)
     toast.success('Gambar berhasil dihapus')
     setDeleteConfirm(null)
   }
@@ -213,16 +206,16 @@ const ManageGallery = () => {
 
       {/* Gallery Grid */}
       {filteredGallery.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 sm:py-16 text-center">
+        <Card className="p-8 sm:p-12">
+          <div className="text-center">
             <Image className="w-12 h-12 sm:w-16 sm:h-16 text-cream/20 mx-auto mb-4" />
-            <h3 className="text-base sm:text-lg font-medium text-cream mb-2">Tidak Ada Gambar</h3>
-            <p className="text-cream/50 text-sm">
-              {searchQuery || selectedCategory !== 'all' 
-                ? 'Tidak ada gambar yang sesuai dengan filter' 
-                : 'Belum ada gambar. Tambahkan gambar baru.'}
+            <h3 className="text-cream font-medium mb-1 text-sm sm:text-base">Tidak ada gambar</h3>
+            <p className="text-cream/50 text-xs sm:text-sm">
+              {searchQuery || selectedCategory !== 'all'
+                ? 'Coba ubah filter pencarian'
+                : 'Mulai tambahkan gambar ke galeri'}
             </p>
-          </CardContent>
+          </div>
         </Card>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -270,7 +263,7 @@ const ManageGallery = () => {
 
                   {/* Status Badge */}
                   <button
-                    onClick={() => toggleActive(item.id)}
+                    onClick={() => handleToggleActive(item.id)}
                     className="absolute top-2 right-2 z-10"
                   >
                     {item.isActive ? (
@@ -299,7 +292,7 @@ const ManageGallery = () => {
       >
         <form onSubmit={handleSubmit} className="py-4 space-y-4">
           {/* Image Upload Placeholder */}
-          <div className="aspect-video bg-charcoal-dark border-2 border-dashed border-gold/30 rounded-lg flex flex-col items-center justify-center">
+          <div className="aspect-[16/9] sm:aspect-video bg-charcoal-dark border-2 border-dashed border-gold/30 rounded-lg flex flex-col items-center justify-center max-h-[150px] sm:max-h-[200px] overflow-hidden">
             {formData.image || editingItem?.image ? (
               <img
                 src={formData.image || editingItem?.image}
@@ -308,7 +301,7 @@ const ManageGallery = () => {
               />
             ) : (
               <>
-                <Upload className="w-8 h-8 sm:w-10 sm:h-10 text-cream/30 mb-2" />
+                <Upload className="w-6 h-6 sm:w-10 sm:h-10 text-cream/30 mb-2" />
                 <p className="text-cream/50 text-xs sm:text-sm">Klik untuk upload gambar</p>
               </>
             )}

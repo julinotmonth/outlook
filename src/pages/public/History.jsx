@@ -18,15 +18,17 @@ import {
   Loader2,
   Wallet,
   Plus,
+  Star,
+  MessageSquare,
 } from 'lucide-react'
 import Button from '../../components/common/Button'
 import { Card, CardContent } from '../../components/common/Card'
-import { Input } from '../../components/common/Input'
+import { Input, Textarea, FormField } from '../../components/common/Input'
 import { StatusBadge } from '../../components/common/Badge'
 import { Modal, DialogFooter } from '../../components/common/Modal'
 import EmptyState from '../../components/common/EmptyState'
 import { formatCurrency, formatDuration, formatBookingId } from '../../utils/formatters'
-import { useHistoryStore } from '../../store/useStore'
+import { useHistoryStore, useReviewStore, useNotificationStore } from '../../store/useStore'
 import { cn } from '../../lib/utils'
 
 const STATUS_FILTERS = [
@@ -39,12 +41,16 @@ const STATUS_FILTERS = [
 
 const History = () => {
   const { bookings, updateBookingStatus } = useHistoryStore()
+  const { addReview, hasReviewForBooking } = useReviewStore()
+  const { addNotification } = useNotificationStore()
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [showCancelModal, setShowCancelModal] = useState(false)
   const [bookingToCancel, setBookingToCancel] = useState(null)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [bookingToReview, setBookingToReview] = useState(null)
 
   // Filter bookings
   const filteredBookings = useMemo(() => {
@@ -79,6 +85,35 @@ const History = () => {
   const openCancelModal = (booking) => {
     setBookingToCancel(booking)
     setShowCancelModal(true)
+  }
+
+  // Open review modal
+  const openReviewModal = (booking) => {
+    setBookingToReview(booking)
+    setShowReviewModal(true)
+  }
+
+  // Handle submit review
+  const handleSubmitReview = (reviewData) => {
+    addReview({
+      ...reviewData,
+      bookingId: bookingToReview.id,
+      barberId: bookingToReview.barber.id,
+      barberName: bookingToReview.barber.name,
+      services: bookingToReview.services.map(s => s.name),
+    })
+
+    // Add notification for admin
+    addNotification({
+      type: 'review',
+      title: 'Review Baru',
+      message: `${reviewData.customerName} memberikan rating ${reviewData.rating} bintang untuk ${bookingToReview.barber.name}`,
+      link: '/admin/team',
+    })
+
+    toast.success('Terima kasih atas ulasan Anda!')
+    setShowReviewModal(false)
+    setBookingToReview(null)
   }
 
   return (
@@ -174,6 +209,8 @@ const History = () => {
                 index={index}
                 onViewDetails={() => setSelectedBooking(booking)}
                 onCancel={() => openCancelModal(booking)}
+                onReview={() => openReviewModal(booking)}
+                hasReview={hasReviewForBooking(booking.id)}
               />
             ))}
           </motion.div>
@@ -190,6 +227,11 @@ const History = () => {
               setSelectedBooking(null)
               openCancelModal(selectedBooking)
             }}
+            onReview={() => {
+              setSelectedBooking(null)
+              openReviewModal(selectedBooking)
+            }}
+            hasReview={hasReviewForBooking(selectedBooking.id)}
           />
         )}
       </AnimatePresence>
@@ -235,13 +277,26 @@ const History = () => {
           </Button>
         </DialogFooter>
       </Modal>
+
+      {/* Review Modal */}
+      {showReviewModal && bookingToReview && (
+        <ReviewModal
+          booking={bookingToReview}
+          onClose={() => {
+            setShowReviewModal(false)
+            setBookingToReview(null)
+          }}
+          onSubmit={handleSubmitReview}
+        />
+      )}
     </div>
   )
 }
 
 // Booking Card Component
-const BookingCard = ({ booking, index, onViewDetails, onCancel }) => {
+const BookingCard = ({ booking, index, onViewDetails, onCancel, onReview, hasReview }) => {
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed'
+  const canReview = booking.status === 'completed' && !hasReview
 
   return (
     <motion.div
@@ -336,6 +391,22 @@ const BookingCard = ({ booking, index, onViewDetails, onCancel }) => {
                   <Eye className="w-4 h-4 mr-1" />
                   Detail
                 </Button>
+                {canReview && (
+                  <Button
+                    size="sm"
+                    onClick={onReview}
+                    className="bg-gold/20 text-gold hover:bg-gold/30"
+                  >
+                    <Star className="w-4 h-4 mr-1" />
+                    Beri Rating
+                  </Button>
+                )}
+                {hasReview && booking.status === 'completed' && (
+                  <div className="flex items-center justify-center gap-1 text-green-500 text-xs py-2">
+                    <CheckCircle className="w-3 h-3" />
+                    Sudah direview
+                  </div>
+                )}
                 {canCancel && (
                   <Button
                     size="sm"
@@ -357,8 +428,9 @@ const BookingCard = ({ booking, index, onViewDetails, onCancel }) => {
 }
 
 // Booking Detail Modal
-const BookingDetailModal = ({ booking, onClose, onCancel }) => {
+const BookingDetailModal = ({ booking, onClose, onCancel, onReview, hasReview }) => {
   const canCancel = booking.status === 'pending' || booking.status === 'confirmed'
+  const canReview = booking.status === 'completed' && !hasReview
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -501,7 +573,7 @@ const BookingDetailModal = ({ booking, onClose, onCancel }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gold/20 flex gap-3">
+        <div className="p-6 border-t border-gold/20 flex flex-wrap gap-3">
           {canCancel && (
             <Button
               variant="ghost"
@@ -512,10 +584,195 @@ const BookingDetailModal = ({ booking, onClose, onCancel }) => {
               Batalkan
             </Button>
           )}
+          {canReview && (
+            <Button onClick={onReview}>
+              <Star className="w-4 h-4 mr-2" />
+              Beri Rating
+            </Button>
+          )}
+          {hasReview && booking.status === 'completed' && (
+            <div className="flex items-center gap-1 text-green-500 text-sm px-4">
+              <CheckCircle className="w-4 h-4" />
+              Sudah direview
+            </div>
+          )}
           <Button variant="outline" className="ml-auto" onClick={onClose}>
             Tutup
           </Button>
         </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// Review Modal Component
+const ReviewModal = ({ booking, onClose, onSubmit }) => {
+  const [rating, setRating] = useState(5)
+  const [hoverRating, setHoverRating] = useState(0)
+  const [comment, setComment] = useState('')
+  const [customerName, setCustomerName] = useState(booking.customer?.name || '')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    
+    if (!customerName.trim()) {
+      toast.error('Nama harus diisi')
+      return
+    }
+    
+    if (!comment.trim()) {
+      toast.error('Ulasan harus diisi')
+      return
+    }
+
+    setIsSubmitting(true)
+    
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    onSubmit({
+      customerName,
+      rating,
+      comment,
+    })
+    
+    setIsSubmitting(false)
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-charcoal-dark/95 backdrop-blur-md" />
+
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full max-w-md bg-charcoal border border-gold/20 rounded-lg overflow-hidden z-10"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="p-6 border-b border-gold/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gold/20 flex items-center justify-center">
+                <Star className="w-5 h-5 text-gold" />
+              </div>
+              <div>
+                <h2 className="font-heading text-xl font-bold text-cream">
+                  Beri Rating & Ulasan
+                </h2>
+                <p className="text-cream/60 text-sm">untuk {booking.barber.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-cream/50 hover:text-gold transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Barber Info */}
+          <div className="flex items-center gap-4 p-4 bg-charcoal-dark rounded-lg">
+            <img
+              src={booking.barber.image}
+              alt={booking.barber.name}
+              className="w-14 h-14 rounded-full object-cover border-2 border-gold/30"
+            />
+            <div>
+              <h3 className="text-cream font-medium">{booking.barber.name}</h3>
+              <p className="text-cream/60 text-sm">
+                {booking.services.map(s => s.name).join(', ')}
+              </p>
+              <p className="text-gold text-xs">
+                {format(new Date(booking.date), 'dd MMM yyyy', { locale: id })}
+              </p>
+            </div>
+          </div>
+
+          {/* Rating Stars */}
+          <div>
+            <label className="block text-cream text-sm font-medium mb-3">Rating</label>
+            <div className="flex justify-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRating(star)}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  className="p-1 transition-transform hover:scale-110"
+                >
+                  <Star
+                    className={cn(
+                      'w-10 h-10 transition-colors',
+                      (hoverRating || rating) >= star
+                        ? 'text-gold fill-gold'
+                        : 'text-cream/30'
+                    )}
+                  />
+                </button>
+              ))}
+            </div>
+            <p className="text-center text-cream/60 text-sm mt-2">
+              {rating === 1 && 'Sangat Buruk'}
+              {rating === 2 && 'Buruk'}
+              {rating === 3 && 'Cukup'}
+              {rating === 4 && 'Bagus'}
+              {rating === 5 && 'Sangat Bagus'}
+            </p>
+          </div>
+
+          {/* Customer Name */}
+          <FormField label="Nama Anda" required>
+            <Input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Masukkan nama Anda"
+            />
+          </FormField>
+
+          {/* Comment */}
+          <FormField label="Ulasan" required>
+            <Textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Ceritakan pengalaman Anda dengan barber ini..."
+              rows={4}
+            />
+          </FormField>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="flex-1"
+            >
+              Batal
+            </Button>
+            <Button
+              type="submit"
+              isLoading={isSubmitting}
+              className="flex-1"
+            >
+              <MessageSquare className="w-4 h-4 mr-2" />
+              Kirim Ulasan
+            </Button>
+          </div>
+        </form>
       </motion.div>
     </motion.div>
   )

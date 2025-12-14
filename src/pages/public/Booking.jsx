@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -22,6 +22,9 @@ import {
   Building2,
   QrCode,
   Copy,
+  X,
+  LogIn,
+  UserPlus,
 } from 'lucide-react'
 import Button from '../../components/common/Button'
 import { Card, CardContent } from '../../components/common/Card'
@@ -29,7 +32,7 @@ import { Input, Textarea, FormField } from '../../components/common/Input'
 import { formatCurrency, formatDuration } from '../../utils/formatters'
 import { bookingCustomerSchema } from '../../utils/validators'
 import { TIME_SLOTS } from '../../utils/constants'
-import { useHistoryStore, useTeamStore, useServicesStore } from '../../store/useStore'
+import { useHistoryStore, useTeamStore, useServicesStore, useNotificationStore, useAuthStore } from '../../store/useStore'
 import { cn } from '../../lib/utils'
 import 'react-day-picker/dist/style.css'
 
@@ -89,8 +92,10 @@ const STEPS = [
 const Booking = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { addBooking } = useHistoryStore()
+  const { bookings, addBooking } = useHistoryStore()
   const { barbers: teamBarbers, getAvailableBarbers } = useTeamStore()
+  const { addNotification } = useNotificationStore()
+  const { isAuthenticated, user } = useAuthStore()
   
   // Get available barbers from store
   const availableBarbers = getAvailableBarbers()
@@ -110,21 +115,31 @@ const Booking = () => {
   const [bookingSuccess, setBookingSuccess] = useState(false)
   const [bookingData, setBookingData] = useState(null)
 
-  // Form for customer info
+  // Form for customer info - pre-fill with user data if authenticated
   const {
     register,
     handleSubmit,
     formState: { errors },
     getValues,
+    setValue,
   } = useForm({
     resolver: zodResolver(bookingCustomerSchema),
     defaultValues: {
-      name: '',
-      email: '',
-      phone: '',
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
       notes: '',
     },
   })
+
+  // Update form when user data is available
+  useEffect(() => {
+    if (user) {
+      setValue('name', user.name || '')
+      setValue('email', user.email || '')
+      setValue('phone', user.phone || '')
+    }
+  }, [user, setValue])
 
   // Pre-select service/barber from URL params
   useEffect(() => {
@@ -140,7 +155,8 @@ const Booking = () => {
       const barber = availableBarbers.find(b => b.id === parseInt(barberId))
       if (barber) {
         setSelectedBarber(barber)
-        if (selectedServices.length > 0) setCurrentStep(2)
+        // Tetap di step 1 agar user bisa pilih layanan dulu
+        // Barber sudah ter-pre-select, jadi saat user ke step 2, barber sudah terpilih
       }
     }
   }, [searchParams, availableBarbers, activeServices])
@@ -209,6 +225,14 @@ const Booking = () => {
 
       // Save to history store
       addBooking(newBooking)
+
+      // Add notification for admin
+      addNotification({
+        type: 'booking',
+        title: 'Booking Baru',
+        message: `${customerData.name} membuat booking untuk ${selectedServices.map(s => s.name).join(', ')} dengan ${selectedBarber.name}`,
+        link: '/admin/bookings',
+      })
       
       setBookingData(newBooking)
       setBookingSuccess(true)
@@ -235,6 +259,81 @@ const Booking = () => {
     return <BookingSuccess bookingData={bookingData} paymentMethod={selectedPayment} />
   }
 
+  // Show login required page if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen pt-24 pb-16">
+        <div className="container mx-auto px-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-lg mx-auto text-center"
+          >
+            {/* Icon */}
+            <div className="w-24 h-24 mx-auto mb-8 rounded-full bg-gold/10 border-2 border-gold/30 flex items-center justify-center">
+              <LogIn className="w-12 h-12 text-gold" />
+            </div>
+
+            {/* Title */}
+            <h1 className="font-heading text-3xl font-bold text-cream mb-4">
+              Login Diperlukan
+            </h1>
+            <p className="text-cream/60 mb-8">
+              Untuk melakukan booking, Anda harus login terlebih dahulu. 
+              Jika belum punya akun, silakan daftar terlebih dahulu.
+            </p>
+
+            {/* Benefits */}
+            <div className="bg-charcoal rounded-lg border border-gold/20 p-6 mb-8 text-left">
+              <h3 className="text-gold font-medium mb-4">Keuntungan memiliki akun:</h3>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3 text-cream/70">
+                  <Check className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                  <span>Booking lebih cepat dengan data tersimpan</span>
+                </li>
+                <li className="flex items-start gap-3 text-cream/70">
+                  <Check className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                  <span>Lihat riwayat booking Anda</span>
+                </li>
+                <li className="flex items-start gap-3 text-cream/70">
+                  <Check className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                  <span>Berikan rating dan ulasan untuk barber</span>
+                </li>
+                <li className="flex items-start gap-3 text-cream/70">
+                  <Check className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
+                  <span>Dapatkan notifikasi pengingat booking</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link to="/login" state={{ from: { pathname: '/booking' }, message: 'Silakan login untuk melanjutkan booking' }}>
+                <Button size="lg" className="w-full sm:w-auto">
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Login
+                </Button>
+              </Link>
+              <Link to="/register">
+                <Button size="lg" variant="outline" className="w-full sm:w-auto">
+                  <UserPlus className="w-5 h-5 mr-2" />
+                  Daftar Akun Baru
+                </Button>
+              </Link>
+            </div>
+
+            {/* Back Link */}
+            <p className="mt-8 text-cream/50 text-sm">
+              <Link to="/" className="text-gold hover:underline">
+                ← Kembali ke Beranda
+              </Link>
+            </p>
+          </motion.div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen pt-24 pb-16">
       <div className="container mx-auto px-4">
@@ -248,6 +347,11 @@ const Booking = () => {
           <h1 className="section-title">
             Book <span className="text-gradient">Appointment</span>
           </h1>
+          {user && (
+            <p className="text-cream/60 mt-2">
+              Halo, <span className="text-gold">{user.name}</span>! Silakan pilih layanan yang Anda inginkan.
+            </p>
+          )}
         </motion.div>
 
         {/* Progress Steps */}
@@ -325,6 +429,8 @@ const Booking = () => {
                 setSelectedDate={setSelectedDate}
                 selectedTime={selectedTime}
                 setSelectedTime={setSelectedTime}
+                selectedBarber={selectedBarber}
+                existingBookings={bookings}
               />
             )}
             {currentStep === 4 && (
@@ -553,8 +659,63 @@ const StepBarber = ({ barbers, selectedBarber, setSelectedBarber }) => {
 }
 
 // Step 3: Schedule Selection
-const StepSchedule = ({ selectedDate, setSelectedDate, selectedTime, setSelectedTime }) => {
+const StepSchedule = ({ selectedDate, setSelectedDate, selectedTime, setSelectedTime, selectedBarber, existingBookings }) => {
   const disabledDays = { before: startOfDay(new Date()) }
+
+  // Filter time slots based on barber's work schedule
+  const getAvailableTimeSlots = () => {
+    if (!selectedBarber?.workSchedule) return TIME_SLOTS
+    
+    const { startTime, endTime } = selectedBarber.workSchedule
+    return TIME_SLOTS.filter(time => {
+      return time >= startTime && time <= endTime
+    })
+  }
+
+  // Check if time slot is booked
+  const isTimeBooked = (time) => {
+    if (!selectedDate || !selectedBarber) return false
+    
+    const selectedDateStr = format(selectedDate, 'yyyy-MM-dd')
+    
+    return existingBookings.some(booking => {
+      return (
+        booking.date === selectedDateStr &&
+        booking.time === time &&
+        booking.barber.id === selectedBarber.id &&
+        (booking.status === 'pending' || booking.status === 'confirmed')
+      )
+    })
+  }
+
+  // Check if time slot is in the past (for today only)
+  const isTimePassed = (time) => {
+    if (!selectedDate) return false
+    
+    const now = new Date()
+    const today = startOfDay(now)
+    const selectedDay = startOfDay(selectedDate)
+    
+    // Only check for today
+    if (selectedDay.getTime() !== today.getTime()) return false
+    
+    const [hours, minutes] = time.split(':').map(Number)
+    const slotTime = new Date()
+    slotTime.setHours(hours, minutes, 0, 0)
+    
+    return slotTime <= now
+  }
+
+  const availableTimeSlots = getAvailableTimeSlots()
+
+  // Reset selected time when date changes and the time is no longer available
+  React.useEffect(() => {
+    if (selectedTime && selectedDate) {
+      if (isTimePassed(selectedTime) || isTimeBooked(selectedTime)) {
+        setSelectedTime(null)
+      }
+    }
+  }, [selectedDate])
 
   return (
     <motion.div
@@ -565,6 +726,16 @@ const StepSchedule = ({ selectedDate, setSelectedDate, selectedTime, setSelected
       <h2 className="font-heading text-2xl font-bold text-cream mb-6">
         Pilih Jadwal
       </h2>
+
+      {/* Barber Schedule Info */}
+      {selectedBarber?.workSchedule && (
+        <div className="mb-6 p-3 rounded-lg bg-gold/10 border border-gold/30 flex items-center gap-2">
+          <Clock className="w-4 h-4 text-gold" />
+          <span className="text-cream text-sm">
+            Jam kerja <span className="text-gold font-medium">{selectedBarber.name}</span>: {selectedBarber.workSchedule.startTime} - {selectedBarber.workSchedule.endTime}
+          </span>
+        </div>
+      )}
       
       <div className="grid md:grid-cols-2 gap-8">
         {/* Calendar */}
@@ -576,7 +747,10 @@ const StepSchedule = ({ selectedDate, setSelectedDate, selectedTime, setSelected
             <DayPicker
               mode="single"
               selected={selectedDate}
-              onSelect={setSelectedDate}
+              onSelect={(date) => {
+                setSelectedDate(date)
+                setSelectedTime(null) // Reset time when date changes
+              }}
               disabled={disabledDays}
               locale={id}
               className="rdp-outlook"
@@ -607,32 +781,73 @@ const StepSchedule = ({ selectedDate, setSelectedDate, selectedTime, setSelected
         {/* Time Slots */}
         <div>
           <h3 className="text-gold text-sm font-medium uppercase tracking-wider mb-3">
-            Waktu
+            Waktu Tersedia
           </h3>
-          <div className="grid grid-cols-3 gap-2">
-            {TIME_SLOTS.map((time) => {
-              const isSelected = selectedTime === time
-              const isUnavailable = ['12:00', '12:30', '18:00'].includes(time)
-              
-              return (
-                <button
-                  key={time}
-                  onClick={() => !isUnavailable && setSelectedTime(time)}
-                  disabled={isUnavailable}
-                  className={cn(
-                    'py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-300',
-                    isSelected
-                      ? 'border-gold bg-gold text-charcoal-dark'
-                      : isUnavailable
-                      ? 'border-cream/10 text-cream/20 cursor-not-allowed'
-                      : 'border-gold/20 text-cream hover:border-gold/50'
-                  )}
-                >
-                  {time}
-                </button>
-              )
-            })}
-          </div>
+          
+          {!selectedDate ? (
+            <div className="text-center py-8 text-cream/50">
+              <Clock className="w-10 h-10 mx-auto mb-2 opacity-50" />
+              <p>Pilih tanggal terlebih dahulu</p>
+            </div>
+          ) : (
+            <>
+              {/* Legend */}
+              <div className="flex flex-wrap gap-4 mb-4 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-gold/20 border border-gold/50"></div>
+                  <span className="text-cream/60">Tersedia</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500/30"></div>
+                  <span className="text-cream/60">Sudah dibooking</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded bg-cream/10 border border-cream/20"></div>
+                  <span className="text-cream/60">Sudah lewat</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {availableTimeSlots.map((time) => {
+                  const isSelected = selectedTime === time
+                  const isBooked = isTimeBooked(time)
+                  const isPassed = isTimePassed(time)
+                  const isUnavailable = isBooked || isPassed
+                  
+                  return (
+                    <button
+                      key={time}
+                      onClick={() => !isUnavailable && setSelectedTime(time)}
+                      disabled={isUnavailable}
+                      className={cn(
+                        'py-3 px-4 rounded-lg border text-sm font-medium transition-all duration-300 relative',
+                        isSelected
+                          ? 'border-gold bg-gold text-charcoal-dark'
+                          : isBooked
+                          ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-not-allowed'
+                          : isPassed
+                          ? 'border-cream/10 bg-cream/5 text-cream/30 cursor-not-allowed line-through'
+                          : 'border-gold/20 text-cream hover:border-gold/50'
+                      )}
+                      title={isBooked ? 'Sudah dibooking' : isPassed ? 'Waktu sudah lewat' : 'Tersedia'}
+                    >
+                      {time}
+                      {isBooked && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                          <X className="w-3 h-3 text-white" />
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+          {availableTimeSlots.length === 0 && selectedDate && (
+            <p className="text-cream/50 text-sm text-center py-4">
+              Tidak ada jadwal tersedia
+            </p>
+          )}
         </div>
       </div>
 

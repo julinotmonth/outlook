@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { format } from 'date-fns'
+import { id } from 'date-fns/locale'
 import { 
   Star, 
   Award, 
   Clock, 
   Calendar,
   Instagram,
-  X
+  X,
+  MessageSquare,
+  Quote
 } from 'lucide-react'
 import Button from '../../components/common/Button'
 import { Modal } from '../../components/common/Modal'
-import { useTeamStore } from '../../store/useStore'
+import { useTeamStore, useReviewStore } from '../../store/useStore'
 import { cn } from '../../lib/utils'
 
 const Team = () => {
@@ -172,7 +176,7 @@ const BarberProfileModal = ({ barber, onClose }) => {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
         transition={{ type: 'spring', damping: 25 }}
-        className="relative max-w-3xl w-full bg-charcoal border border-gold/20 rounded-lg overflow-hidden z-10"
+        className="relative max-w-3xl w-full max-h-[90vh] overflow-y-auto bg-charcoal border border-gold/20 rounded-lg z-10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -183,103 +187,168 @@ const BarberProfileModal = ({ barber, onClose }) => {
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex flex-col md:flex-row">
-          {/* Image */}
-          <div className="md:w-2/5 aspect-[4/5] md:aspect-auto">
-            <img
-              src={barber.image}
-              alt={barber.name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-
-          {/* Content */}
-          <div className="md:w-3/5 p-6 md:p-8">
-            {/* Header */}
-            <div className="mb-6">
-              <span className={cn(
-                'inline-block px-3 py-1 rounded-full text-xs font-medium mb-3',
-                barber.isAvailable
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                  : 'bg-red-500/20 text-red-400 border border-red-500/30'
-              )}>
-                {barber.isAvailable ? 'Available Today' : 'Not Available'}
-              </span>
-              <h2 className="font-heading text-3xl font-bold text-cream mb-1">
-                {barber.name}
-              </h2>
-              <p className="text-gold">{barber.role}</p>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="text-center p-3 bg-charcoal-dark rounded-lg">
-                <div className="flex items-center justify-center gap-1 text-gold mb-1">
-                  <Star className="w-4 h-4 fill-gold" />
-                  <span className="font-display text-xl">{barber.rating}</span>
-                </div>
-                <span className="text-cream/50 text-xs">Rating</span>
-              </div>
-              <div className="text-center p-3 bg-charcoal-dark rounded-lg">
-                <div className="flex items-center justify-center gap-1 text-gold mb-1">
-                  <Award className="w-4 h-4" />
-                  <span className="font-display text-xl">{barber.experience}</span>
-                </div>
-                <span className="text-cream/50 text-xs">Tahun</span>
-              </div>
-              <div className="text-center p-3 bg-charcoal-dark rounded-lg">
-                <span className="font-display text-xl text-gold block mb-1">
-                  {barber.totalClients.toLocaleString()}
-                </span>
-                <span className="text-cream/50 text-xs">Klien</span>
-              </div>
-            </div>
-
-            {/* Bio */}
-            <div className="mb-6">
-              <h3 className="text-cream font-medium mb-2">Tentang</h3>
-              <p className="text-cream/60 text-sm leading-relaxed">{barber.bio}</p>
-            </div>
-
-            {/* Specializations */}
-            <div className="mb-6">
-              <h3 className="text-cream font-medium mb-2">Keahlian</h3>
-              <div className="flex flex-wrap gap-2">
-                {barber.specializations.map((spec) => (
-                  <span
-                    key={spec}
-                    className="px-3 py-1.5 bg-gold/10 text-gold text-sm rounded-full border border-gold/30"
-                  >
-                    {spec}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Instagram */}
-            <div className="mb-6">
-              <a
-                href={`https://instagram.com/${barber.instagram.replace('@', '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-cream/60 hover:text-gold transition-colors"
-              >
-                <Instagram className="w-4 h-4" />
-                <span className="text-sm">{barber.instagram}</span>
-              </a>
-            </div>
-
-            {/* Book Button */}
-            <Link to={`/booking?barber=${barber.id}`}>
-              <Button className="w-full" size="lg" disabled={!barber.isAvailable}>
-                <Calendar className="w-4 h-4 mr-2" />
-                {barber.isAvailable ? 'Book Appointment' : 'Tidak Tersedia'}
-              </Button>
-            </Link>
-          </div>
-        </div>
+        <BarberProfileContent barber={barber} />
       </motion.div>
     </motion.div>
+  )
+}
+
+// Barber Profile Content
+const BarberProfileContent = ({ barber }) => {
+  const { getBarberRating, getBarberReviewCount, getReviewsByBarber } = useReviewStore()
+  
+  const rating = getBarberRating(barber.id) || barber.rating
+  const reviewCount = getBarberReviewCount(barber.id)
+  const reviews = getReviewsByBarber(barber.id)
+
+  return (
+    <div className="flex flex-col md:flex-row">
+      {/* Image */}
+      <div className="md:w-2/5 aspect-[4/5] md:aspect-auto">
+        <img
+          src={barber.image}
+          alt={barber.name}
+          className="w-full h-full object-cover"
+        />
+      </div>
+
+      {/* Content */}
+      <div className="md:w-3/5 p-6 md:p-8">
+        {/* Header */}
+        <div className="mb-6">
+          <span className={cn(
+            'inline-block px-3 py-1 rounded-full text-xs font-medium mb-3',
+            barber.isAvailable
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+          )}>
+            {barber.isAvailable ? 'Available Today' : 'Not Available'}
+          </span>
+          <h2 className="font-heading text-3xl font-bold text-cream mb-1">
+            {barber.name}
+          </h2>
+          <p className="text-gold">{barber.role}</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="text-center p-3 bg-charcoal-dark rounded-lg">
+            <div className="flex items-center justify-center gap-1 text-gold mb-1">
+              <Star className="w-4 h-4 fill-gold" />
+              <span className="font-display text-xl">{rating}</span>
+            </div>
+            <span className="text-cream/50 text-xs">Rating ({reviewCount})</span>
+          </div>
+          <div className="text-center p-3 bg-charcoal-dark rounded-lg">
+            <div className="flex items-center justify-center gap-1 text-gold mb-1">
+              <Award className="w-4 h-4" />
+              <span className="font-display text-xl">{barber.experience}</span>
+            </div>
+            <span className="text-cream/50 text-xs">Tahun</span>
+          </div>
+          <div className="text-center p-3 bg-charcoal-dark rounded-lg">
+            <span className="font-display text-xl text-gold block mb-1">
+              {barber.totalClients.toLocaleString()}
+            </span>
+            <span className="text-cream/50 text-xs">Klien</span>
+          </div>
+        </div>
+
+        {/* Bio */}
+        <div className="mb-6">
+          <h3 className="text-cream font-medium mb-2">Tentang</h3>
+          <p className="text-cream/60 text-sm leading-relaxed">{barber.bio}</p>
+        </div>
+
+        {/* Specializations */}
+        <div className="mb-6">
+          <h3 className="text-cream font-medium mb-2">Keahlian</h3>
+          <div className="flex flex-wrap gap-2">
+            {barber.specializations.map((spec) => (
+              <span
+                key={spec}
+                className="px-3 py-1.5 bg-gold/10 text-gold text-sm rounded-full border border-gold/30"
+              >
+                {spec}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Work Schedule */}
+        {barber.workSchedule && (
+          <div className="mb-6">
+            <h3 className="text-cream font-medium mb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-gold" />
+              Jam Kerja
+            </h3>
+            <p className="text-cream/60 text-sm">
+              {barber.workSchedule.startTime} - {barber.workSchedule.endTime}
+            </p>
+          </div>
+        )}
+
+        {/* Instagram */}
+        {barber.instagram && (
+          <div className="mb-6">
+            <a
+              href={`https://instagram.com/${barber.instagram.replace('@', '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-cream/60 hover:text-gold transition-colors"
+            >
+              <Instagram className="w-4 h-4" />
+              <span className="text-sm">{barber.instagram}</span>
+            </a>
+          </div>
+        )}
+
+        {/* Reviews Section */}
+        {reviews.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-cream font-medium mb-3 flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-gold" />
+              Ulasan Pelanggan ({reviewCount})
+            </h3>
+            <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+              {reviews.slice(0, 5).map((review) => (
+                <div key={review.id} className="p-3 bg-charcoal-dark rounded-lg relative">
+                  <Quote className="w-6 h-6 text-gold/10 absolute top-2 right-2" />
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star
+                          key={star}
+                          className={cn(
+                            'w-3 h-3',
+                            star <= review.rating
+                              ? 'text-gold fill-gold'
+                              : 'text-cream/20'
+                          )}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-cream text-sm font-medium">{review.customerName}</span>
+                  </div>
+                  <p className="text-cream/60 text-sm">{review.comment}</p>
+                  <p className="text-cream/30 text-xs mt-1">
+                    {format(new Date(review.createdAt), 'dd MMM yyyy', { locale: id })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Book Button */}
+        <Link to={`/booking?barber=${barber.id}`}>
+          <Button className="w-full" size="lg" disabled={!barber.isAvailable}>
+            <Calendar className="w-4 h-4 mr-2" />
+            {barber.isAvailable ? 'Book Appointment' : 'Tidak Tersedia'}
+          </Button>
+        </Link>
+      </div>
+    </div>
   )
 }
 
